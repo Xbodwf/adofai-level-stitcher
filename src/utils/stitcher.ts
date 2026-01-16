@@ -67,7 +67,8 @@ export function stitchLevels(
   sourceRange: [number, number],
   targetLevel: Level,
   targetStartIndex: number,
-  allowedEventTypes?: string[]
+  selectedEvents: string[],
+  filterMode: 'whitelist' | 'blacklist'
 ): Level {
   const sourceTiming = calculateTiming(sourceLevel);
   const targetTiming = calculateTiming(targetLevel);
@@ -75,13 +76,15 @@ export function stitchLevels(
   const [startIdx, endIdx] = sourceRange;
   const sourceStartTime = sourceTiming.tileTimes[startIdx];
 
-  // 1. 获取源谱面范围内的所有事件，并根据白名单过滤
+  // 1. 获取源谱面范围内的所有事件，并根据模式过滤
   let eventsToTransfer = sourceTiming.eventTimes.filter(
     et => et.tileIndex >= startIdx && et.tileIndex <= endIdx
   );
 
-  if (allowedEventTypes) {
-    eventsToTransfer = eventsToTransfer.filter(et => allowedEventTypes.includes(et.event.eventType));
+  if (filterMode === 'whitelist') {
+    eventsToTransfer = eventsToTransfer.filter(et => selectedEvents.includes(et.event.eventType));
+  } else {
+    eventsToTransfer = eventsToTransfer.filter(et => !selectedEvents.includes(et.event.eventType));
   }
 
   const targetStartTime = targetTiming.tileTimes[targetStartIndex];

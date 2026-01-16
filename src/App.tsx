@@ -15,12 +15,16 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
-  Grid
+  Grid,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SaveIcon from '@mui/icons-material/Save';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import InfoIcon from '@mui/icons-material/Info';
 import { Level, Parsers } from 'adofai';
 import { stitchLevels } from './utils/stitcher';
 
@@ -60,7 +64,8 @@ function App() {
   const [targetStartTile, setTargetStartTile] = useState<number>(0);
 
   // 事件过滤
-  const [selectedEvents, setSelectedEvents] = useState<string[]>(ALL_EVENTS);
+  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  const [filterMode, setFilterMode] = useState<'whitelist' | 'blacklist'>('blacklist');
 
   const [error, setError] = useState<string | null>(null);
 
@@ -120,7 +125,8 @@ function App() {
           [sourceStartTile, sourceEndTile],
           clonedTarget,
           targetStartTile,
-          selectedEvents
+          selectedEvents,
+          filterMode
         );
 
         // 导出并下载
@@ -209,13 +215,32 @@ function App() {
 
           {/* 事件过滤部分 */}
           <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <FilterListIcon color="primary" /> 2. 事件黑/白名单
-            </Typography>
-            <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FilterListIcon color="primary" /> 2. 事件过滤设置
+              </Typography>
+              <ToggleButtonGroup
+                value={filterMode}
+                exclusive
+                onChange={(_, mode) => mode && setFilterMode(mode)}
+                size="small"
+                color="primary"
+              >
+                <ToggleButton value="blacklist">黑名单模式</ToggleButton>
+                <ToggleButton value="whitelist">白名单模式</ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+
+            <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }} icon={<InfoIcon />}>
+              {filterMode === 'blacklist' 
+                ? "黑名单模式：勾选的事件将【不会】被缝合。建议用于排除装饰类事件。" 
+                : "白名单模式：只有勾选的事件才【会被】缝合。建议用于只提取特定逻辑。"}
+            </Alert>
+
+            <Box sx={{ mb: 2, display: 'flex', gap: 1, alignItems: 'center' }}>
               <Button size="small" variant="outlined" onClick={handleSelectAll}>全选</Button>
               <Button size="small" variant="outlined" onClick={handleSelectNone}>全不选</Button>
-              <Typography variant="caption" sx={{ ml: 'auto', alignSelf: 'center' }}>
+              <Typography variant="caption" sx={{ ml: 'auto' }}>
                 已选择 {selectedEvents.length} / {ALL_EVENTS.length} 种事件
               </Typography>
             </Box>
@@ -229,6 +254,7 @@ function App() {
                           size="small"
                           checked={selectedEvents.includes(ev)} 
                           onChange={() => handleToggleEvent(ev)} 
+                          color={filterMode === 'blacklist' ? 'error' : 'primary'}
                         />
                       }
                       label={<Typography variant="body2">{ev}</Typography>}
