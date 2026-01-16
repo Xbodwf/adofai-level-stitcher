@@ -1,4 +1,6 @@
-import { Level, AdofaiEvent } from 'adofai';
+import { Level, Structure } from 'adofai';
+
+export type AdofaiEvent = Structure.AdofaiEvent;
 
 export interface TimingInfo {
   tileTimes: number[];
@@ -64,7 +66,8 @@ export function stitchLevels(
   sourceLevel: Level,
   sourceRange: [number, number],
   targetLevel: Level,
-  targetStartIndex: number
+  targetStartIndex: number,
+  allowedEventTypes?: string[]
 ): Level {
   const sourceTiming = calculateTiming(sourceLevel);
   const targetTiming = calculateTiming(targetLevel);
@@ -72,10 +75,14 @@ export function stitchLevels(
   const [startIdx, endIdx] = sourceRange;
   const sourceStartTime = sourceTiming.tileTimes[startIdx];
 
-  // 1. 获取源谱面范围内的所有事件
-  const eventsToTransfer = sourceTiming.eventTimes.filter(
+  // 1. 获取源谱面范围内的所有事件，并根据白名单过滤
+  let eventsToTransfer = sourceTiming.eventTimes.filter(
     et => et.tileIndex >= startIdx && et.tileIndex <= endIdx
   );
+
+  if (allowedEventTypes) {
+    eventsToTransfer = eventsToTransfer.filter(et => allowedEventTypes.includes(et.event.eventType));
+  }
 
   const targetStartTime = targetTiming.tileTimes[targetStartIndex];
 

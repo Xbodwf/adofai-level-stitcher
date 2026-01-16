@@ -11,13 +11,30 @@ import {
   ThemeProvider,
   createTheme,
   CssBaseline,
-  Divider
+  Divider,
+  Checkbox,
+  FormControlLabel,
+  FormGroup,
+  Grid
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SaveIcon from '@mui/icons-material/Save';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { Level, Parsers } from 'adofai';
 import { stitchLevels } from './utils/stitcher';
+
+const ALL_EVENTS = [ 
+  'AddDecoration', 'AddText', 'AddObject', 'SetSpeed', 'Twirl', 'Checkpoint', 
+  'SetHitsound', 'PlaySound', 'SetPlanetRotation', 'Pause', 'AutoPlayTiles', 
+  'ScalePlanets', 'ColorTrack', 'AnimateTrack', 'RecolorTrack', 'MoveTrack', 
+  'PositionTrack', 'MoveDecorations', 'SetText', 'SetObject', 'SetDefaultText', 
+  'CustomBackground', 'Flash', 'MoveCamera', 'SetFilter','SetFilterAdvanced','HallofMirrors', 
+  'ShakeScreen', 'Bloom', 'ScreenTile', 'ScreenScroll', 'SetFrameRate', 
+  'RepeatEvents', 'SetConditionalEvents', 'EditorComment', 'Bookmark', 'Hold', 
+  'SetHoldSound', 'MultiPlanet', 'FreeRoam', 'FreeRoamTwirl', 'FreeRoamRemove', 
+  'Hide', 'ScaleMargin', 'ScaleRadius' 
+];
 
 const theme = createTheme({
   palette: {
@@ -42,7 +59,21 @@ function App() {
   const [targetFileName, setTargetFileName] = useState<string>('');
   const [targetStartTile, setTargetStartTile] = useState<number>(0);
 
+  // 事件过滤
+  const [selectedEvents, setSelectedEvents] = useState<string[]>(ALL_EVENTS);
+
   const [error, setError] = useState<string | null>(null);
+
+  const handleToggleEvent = (event: string) => {
+    setSelectedEvents(prev => 
+      prev.includes(event) 
+        ? prev.filter(e => e !== event) 
+        : [...prev, event]
+    );
+  };
+
+  const handleSelectAll = () => setSelectedEvents(ALL_EVENTS);
+  const handleSelectNone = () => setSelectedEvents([]);
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, isSource: boolean) => {
     const file = event.target.files?.[0];
@@ -81,7 +112,6 @@ function App() {
 
     try {
       // 深度克隆 targetLevel 以免修改原始状态
-      // 由于 Level 对象较复杂，我们先导出再重新加载来实现深度克隆
       const targetContent = targetLevel.export('string', 0, true, '\t', 1) as string;
       const clonedTarget = new Level(targetContent, new Parsers.StringParser());
       clonedTarget.load().then(() => {
@@ -89,7 +119,8 @@ function App() {
           sourceLevel,
           [sourceStartTile, sourceEndTile],
           clonedTarget,
-          targetStartTile
+          targetStartTile,
+          selectedEvents
         );
 
         // 导出并下载
@@ -176,10 +207,42 @@ function App() {
             )}
           </Paper>
 
+          {/* 事件过滤部分 */}
+          <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FilterListIcon color="primary" /> 2. 事件黑/白名单
+            </Typography>
+            <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+              <Button size="small" variant="outlined" onClick={handleSelectAll}>全选</Button>
+              <Button size="small" variant="outlined" onClick={handleSelectNone}>全不选</Button>
+              <Typography variant="caption" sx={{ ml: 'auto', alignSelf: 'center' }}>
+                已选择 {selectedEvents.length} / {ALL_EVENTS.length} 种事件
+              </Typography>
+            </Box>
+            <Box sx={{ maxHeight: 300, overflow: 'auto', border: '1px solid #eee', p: 2, borderRadius: 1 }}>
+              <Grid container spacing={1}>
+                {ALL_EVENTS.map(ev => (
+                  <Grid item xs={6} sm={4} key={ev}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          size="small"
+                          checked={selectedEvents.includes(ev)} 
+                          onChange={() => handleToggleEvent(ev)} 
+                        />
+                      }
+                      label={<Typography variant="body2">{ev}</Typography>}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+          </Paper>
+
           {/* 目标谱面部分 */}
           <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
             <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SaveIcon color="primary" /> 2. 选择目标谱面 (粘贴目的地)
+              <SaveIcon color="primary" /> 3. 选择目标谱面 (粘贴目的地)
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2, mb: targetLevel ? 3 : 0 }}>
               <Button
