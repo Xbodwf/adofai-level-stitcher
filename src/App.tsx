@@ -10,12 +10,16 @@ import {
   Alert,
   ThemeProvider,
   createTheme,
-  CssBaseline
+  CssBaseline,
+  Divider
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
- import { Level, Parsers } from 'adofai';
- 
- const theme = createTheme({
+import SaveIcon from '@mui/icons-material/Save';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import { Level, Parsers } from 'adofai';
+import { stitchLevels } from './utils/stitcher';
+
+const theme = createTheme({
   palette: {
     primary: {
       main: '#2196f3',
@@ -27,36 +31,83 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 });
 
 function App() {
-  const [level, setLevel] = useState<Level | null>(null);
-  const [fileName, setFileName] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
-  const [startTile, setStartTile] = useState<number>(0);
-  const [endTile, setEndTile] = useState<number>(0);
+  // 源谱面 (第一个文件)
+  const [sourceLevel, setSourceLevel] = useState<Level | null>(null);
+  const [sourceFileName, setSourceFileName] = useState<string>('');
+  const [sourceStartTile, setSourceStartTile] = useState<number>(0);
+  const [sourceEndTile, setSourceEndTile] = useState<number>(0);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // 目标谱面 (第二个文件)
+  const [targetLevel, setTargetLevel] = useState<Level | null>(null);
+  const [targetFileName, setTargetFileName] = useState<string>('');
+  const [targetStartTile, setTargetStartTile] = useState<number>(0);
+
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, isSource: boolean) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setFileName(file.name);
+    if (isSource) {
+      setSourceFileName(file.name);
+    } else {
+      setTargetFileName(file.name);
+    }
     setError(null);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-       try {
-         const content = e.target?.result as string;
-         // 使用 StringParser 解析，以支持非标准 JSON 格式的 .adofai 文件
-         const newLevel = new Level(content, new Parsers.StringParser());
-         await newLevel.load();
-         setLevel(newLevel);
-        // 默认结束砖块为最后一个砖块
-        setEndTile(newLevel.tiles.length - 1);
+      try {
+        const content = e.target?.result as string;
+        const newLevel = new Level(content, new Parsers.StringParser());
+        await newLevel.load();
+        
+        if (isSource) {
+          setSourceLevel(newLevel);
+          setSourceEndTile(newLevel.tiles.length - 1);
+        } else {
+          setTargetLevel(newLevel);
+        }
       } catch (err) {
         console.error(err);
-        setError('无法解析 .adofai 文件，请确保文件格式正确。');
-        setLevel(null);
+        setError(`无法解析文件 ${file.name}，请确保格式正确。`);
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleStitch = () => {
+    if (!sourceLevel || !targetLevel) return;
+
+    try {
+      // 深度克隆 targetLevel 以免修改原始状态
+      // 由于 Level 对象较复杂，我们先导出再重新加载来实现深度克隆
+      const targetContent = targetLevel.export('string', 0, true, '\t', 1) as string;
+      const clonedTarget = new Level(targetContent, new Parsers.StringParser());
+      clonedTarget.load().then(() => {
+        const stitchedLevel = stitchLevels(
+          sourceLevel,
+          [sourceStartTile, sourceEndTile],
+          clonedTarget,
+          targetStartTile
+        );
+
+        // 导出并下载
+        const result = stitchedLevel.export('string', 0, true, '\t', 1) as string;
+        const blob = new Blob([result], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `stitched_${targetFileName}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    } catch (err) {
+      console.error(err);
+      setError('缝合过程中出错。');
+    }
   };
 
   return (
@@ -67,68 +118,126 @@ function App() {
           ADOFAI Level Stitcher
         </Typography>
         
-        <Paper elevation={3} sx={{ p: 3, mb: 3, borderRadius: 2 }}>
-          <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
-            1. 导入谱面文件
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2 }}>
-            <Button
-              component="label"
-              variant="contained"
-              startIcon={<CloudUploadIcon />}
-              sx={{ borderRadius: 2 }}
-            >
-              选择文件 (.adofai / .json)
-              <input
-                type="file"
-                hidden
-                accept=".adofai,.json"
-                onChange={handleFileUpload}
-              />
-            </Button>
-            <Typography variant="body1" color="textSecondary">
-              {fileName || '未选择文件'}
-            </Typography>
-          </Box>
-          {error && <Alert severity="error" sx={{ mt: 2, borderRadius: 2 }}>{error}</Alert>}
-        </Paper>
-
-        {level && (
+        <Stack spacing={3}>
+          {/* 源谱面部分 */}
           <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
-            <Typography variant="h6" gutterBottom>
-              2. 选择截取范围
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <ContentCopyIcon color="primary" /> 1. 选择源谱面 (复制来源)
             </Typography>
-            <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-              谱面共有 {level.tiles.length} 个砖块 (索引从 0 到 {level.tiles.length - 1})
-            </Typography>
-            <Stack direction="row" spacing={3}>
-              <TextField
-                label="开始砖块索引"
-                type="number"
-                value={startTile}
-                onChange={(e) => setStartTile(Math.max(0, parseInt(e.target.value) || 0))}
-                fullWidth
-                variant="outlined"
-                helperText="包含此砖块"
-              />
-              <TextField
-                label="结束砖块索引"
-                type="number"
-                value={endTile}
-                onChange={(e) => setEndTile(Math.min(level.tiles.length - 1, parseInt(e.target.value) || 0))}
-                fullWidth
-                variant="outlined"
-                helperText="包含此砖块"
-              />
-            </Stack>
-            
-            <Box sx={{ mt: 3, p: 2, bgcolor: 'rgba(33, 150, 243, 0.08)', borderRadius: 2 }}>
-              <Typography variant="subtitle2" color="primary">
-                已选择范围: {startTile} - {endTile} (共 {Math.max(0, endTile - startTile + 1)} 个砖块)
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2, mb: sourceLevel ? 3 : 0 }}>
+              <Button
+                component="label"
+                variant="contained"
+                startIcon={<CloudUploadIcon />}
+                sx={{ borderRadius: 2 }}
+              >
+                导入源谱面
+                <input
+                  type="file"
+                  hidden
+                  accept=".adofai,.json"
+                  onChange={(e) => handleFileUpload(e, true)}
+                />
+              </Button>
+              <Typography variant="body1" color="textSecondary">
+                {sourceFileName || '未选择文件'}
               </Typography>
             </Box>
+
+            {sourceLevel && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                  谱面共有 {sourceLevel.tiles.length} 个砖块
+                </Typography>
+                <Stack direction="row" spacing={3}>
+                  <TextField
+                    label="开始砖块索引"
+                    type="number"
+                    size="small"
+                    value={sourceStartTile}
+                    onChange={(e) => setSourceStartTile(Math.max(0, Math.min(sourceLevel.tiles.length - 1, parseInt(e.target.value) || 0)))}
+                    fullWidth
+                  />
+                  <TextField
+                    label="结束砖块索引"
+                    type="number"
+                    size="small"
+                    value={sourceEndTile}
+                    onChange={(e) => setSourceEndTile(Math.max(sourceStartTile, Math.min(sourceLevel.tiles.length - 1, parseInt(e.target.value) || 0)))}
+                    fullWidth
+                  />
+                </Stack>
+                <Box sx={{ mt: 2, p: 1.5, bgcolor: 'rgba(33, 150, 243, 0.08)', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" color="primary">
+                    已选择范围: {sourceStartTile} - {sourceEndTile} (共 {sourceEndTile - sourceStartTile + 1} 个砖块的事件)
+                  </Typography>
+                </Box>
+              </Box>
+            )}
           </Paper>
-        )}
+
+          {/* 目标谱面部分 */}
+          <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
+            <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SaveIcon color="primary" /> 2. 选择目标谱面 (粘贴目的地)
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2, mb: targetLevel ? 3 : 0 }}>
+              <Button
+                component="label"
+                variant="contained"
+                color="secondary"
+                startIcon={<CloudUploadIcon />}
+                sx={{ borderRadius: 2 }}
+              >
+                导入目标谱面
+                <input
+                  type="file"
+                  hidden
+                  accept=".adofai,.json"
+                  onChange={(e) => handleFileUpload(e, false)}
+                />
+              </Button>
+              <Typography variant="body1" color="textSecondary">
+                {targetFileName || '未选择文件'}
+              </Typography>
+            </Box>
+
+            {targetLevel && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                  谱面共有 {targetLevel.tiles.length} 个砖块
+                </Typography>
+                <TextField
+                  label="插入位置 (目标砖块索引)"
+                  type="number"
+                  size="small"
+                  value={targetStartTile}
+                  onChange={(e) => setTargetStartTile(Math.max(0, Math.min(targetLevel.tiles.length - 1, parseInt(e.target.value) || 0)))}
+                  fullWidth
+                  helperText="源谱面的事件将从该砖块的时间点开始粘贴"
+                />
+              </Box>
+            )}
+          </Paper>
+
+          {/* 操作按钮 */}
+          {sourceLevel && targetLevel && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <Button
+                variant="contained"
+                size="large"
+                color="primary"
+                startIcon={<SaveIcon />}
+                onClick={handleStitch}
+                sx={{ px: 8, py: 1.5, borderRadius: 10, fontWeight: 'bold', fontSize: '1.1rem', boxShadow: 4 }}
+              >
+                开始缝合并导出
+              </Button>
+            </Box>
+          )}
+
+          {error && <Alert severity="error" sx={{ borderRadius: 2 }}>{error}</Alert>}
+        </Stack>
       </Container>
     </ThemeProvider>
   );
