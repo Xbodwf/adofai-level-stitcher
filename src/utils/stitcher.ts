@@ -20,8 +20,9 @@ export function calculateTiming(level: Level): TimingInfo {
   const bpmAtTiles: number[] = [];
 
   level.tiles.forEach((tile, index) => {
-    // 1. 在处理当前砖块的时间前，先检查是否有 SetSpeed 事件改变 BPM
+    // 1. 在处理当前砖块的时间前，先检查是否有 SetSpeed 或 Pause 事件改变时间或 BPM
     // 按照用户逻辑：若该砖块存在 SetSpeed 事件，需要先更新 cbpm 后再进行此计算
+    // 按照用户逻辑：Pause 如果在遍历过程中遇到此事件，那么将 timestack += event.duration * 60/bpm
     tile.actions.forEach(event => {
       if (event.eventType === 'SetSpeed') {
         if (event.speedType === 'Bpm') {
@@ -29,6 +30,9 @@ export function calculateTiming(level: Level): TimingInfo {
         } else if (event.speedType === 'Multiplier') {
           cbpm = cbpm * event.bpmMultiplier;
         }
+      } else if (event.eventType === 'Pause') {
+        const duration = event.duration || 0;
+        timestack += (duration * 60) / cbpm;
       }
     });
 
