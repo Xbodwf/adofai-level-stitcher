@@ -13,9 +13,9 @@ import {
   CssBaseline
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
-import { Level } from 'adofai';
-
-const theme = createTheme({
+ import { Level, Parsers } from 'adofai';
+ 
+ const theme = createTheme({
   palette: {
     primary: {
       main: '#2196f3',
@@ -42,11 +42,12 @@ function App() {
 
     const reader = new FileReader();
     reader.onload = async (e) => {
-      try {
-        const content = e.target?.result as string;
-        const newLevel = new Level(content);
-        await newLevel.load();
-        setLevel(newLevel);
+       try {
+         const content = e.target?.result as string;
+         // 使用 StringParser 解析，以支持非标准 JSON 格式的 .adofai 文件
+         const newLevel = new Level(content, new Parsers.StringParser());
+         await newLevel.load();
+         setLevel(newLevel);
         // 默认结束砖块为最后一个砖块
         setEndTile(newLevel.tiles.length - 1);
       } catch (err) {
