@@ -153,13 +153,15 @@ export function stitchLevels(
 
     // 4. 如果添加的是 SetSpeed 或 Pause，立即更新当前的状态，影响后续事件的放置
     if (newEvent.eventType === 'SetSpeed') {
-      if (newEvent.speedType === 'Bpm') {
-        currentTargetBpm = newEvent.beatsPerMinute;
-      } else if (newEvent.speedType === 'Multiplier') {
-        currentTargetBpm *= newEvent.bpmMultiplier;
+      const e = newEvent as any;
+      if (e.speedType === 'Bpm') {
+        currentTargetBpm = e.beatsPerMinute;
+      } else if (e.speedType === 'Multiplier') {
+        currentTargetBpm *= e.bpmMultiplier;
       }
     } else if (newEvent.eventType === 'Pause') {
-      const duration = newEvent.duration || 0;
+      const e = newEvent as any;
+      const duration = e.duration || 0;
       const pauseTime = (duration * 60) / currentTargetBpm;
       currentTargetTileTime += pauseTime;
     }
