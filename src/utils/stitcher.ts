@@ -42,8 +42,12 @@ export function getTilePauseDelay(tile: any, currentBpm: number): { delay: numbe
  * @param level ADOFAI Level 对象
  */
 export function calculateTiming(level: Level): TimingInfo {
-  let timestack = 0;
   let cbpm = level.settings.bpm;
+  
+  // 初始时间戳：如果第 0 个砖块有 angleData (即初始旋转角度)，则计算该角度消耗的时间
+  // 注意：Level.tiles[0] 的 angle 属性对应 angleData
+  let timestack = getTileTravelTime(level.tiles[0]?.angle || 0, cbpm);
+  
   const tileTimes: number[] = [];
   const eventTimes: { 
     tileIndex: number; 
