@@ -28,16 +28,26 @@ import InfoIcon from '@mui/icons-material/Info';
 import { Level, Parsers } from 'adofai';
 import { stitchLevels } from './utils/stitcher';
 
+const GAMEPLAY_EVENTS = [
+  'SetSpeed', 'Twirl', 'Checkpoint', 'Pause', 'AutoPlayTiles', 
+  'MultiPlanet', 'FreeRoam', 'FreeRoamTwirl', 'FreeRoamRemove', 
+  'Hide', 'ScaleMargin', 'ScaleRadius'
+];
+
+const SPECIAL_DECO_EVENTS = [
+  'AddDecoration', 'AddObject', 'AddText'
+];
+
 const ALL_EVENTS = [ 
-  'AddDecoration', 'AddText', 'AddObject', 'SetSpeed', 'Twirl', 'Checkpoint', 
-  'SetHitsound', 'PlaySound', 'SetPlanetRotation', 'Pause', 'AutoPlayTiles', 
+  ...GAMEPLAY_EVENTS,
+  ...SPECIAL_DECO_EVENTS,
+  'SetHitsound', 'PlaySound', 'SetPlanetRotation', 
   'ScalePlanets', 'ColorTrack', 'AnimateTrack', 'RecolorTrack', 'MoveTrack', 
   'PositionTrack', 'MoveDecorations', 'SetText', 'SetObject', 'SetDefaultText', 
   'CustomBackground', 'Flash', 'MoveCamera', 'SetFilter','SetFilterAdvanced','HallofMirrors', 
   'ShakeScreen', 'Bloom', 'ScreenTile', 'ScreenScroll', 'SetFrameRate', 
   'RepeatEvents', 'SetConditionalEvents', 'EditorComment', 'Bookmark', 'Hold', 
-  'SetHoldSound', 'MultiPlanet', 'FreeRoam', 'FreeRoamTwirl', 'FreeRoamRemove', 
-  'Hide', 'ScaleMargin', 'ScaleRadius' 
+  'SetHoldSound'
 ];
 
 const theme = createTheme({
@@ -64,7 +74,7 @@ function App() {
   const [targetStartTile, setTargetStartTile] = useState<number>(0);
 
   // 事件过滤
-  const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  const [selectedEvents, setSelectedEvents] = useState<string[]>(GAMEPLAY_EVENTS);
   const [filterMode, setFilterMode] = useState<'whitelist' | 'blacklist'>('blacklist');
 
   const [error, setError] = useState<string | null>(null);
@@ -244,9 +254,58 @@ function App() {
                 已选择 {selectedEvents.length} / {ALL_EVENTS.length} 种事件
               </Typography>
             </Box>
-            <Box sx={{ maxHeight: 300, overflow: 'auto', border: '1px solid #eee', p: 2, borderRadius: 1 }}>
+            <Box sx={{ maxHeight: 400, overflow: 'auto', border: '1px solid #eee', p: 2, borderRadius: 1 }}>
+              <Typography variant="subtitle2" color="primary" gutterBottom sx={{ fontWeight: 'bold', mt: 1 }}>
+                🎮 玩法类事件 (默认勾选)
+              </Typography>
+              <Grid container spacing={1} sx={{ mb: 2 }}>
+                {GAMEPLAY_EVENTS.map(ev => (
+                  <Grid item xs={6} sm={4} key={ev}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          size="small"
+                          checked={selectedEvents.includes(ev)} 
+                          onChange={() => handleToggleEvent(ev)} 
+                          color={filterMode === 'blacklist' ? 'error' : 'primary'}
+                        />
+                      }
+                      label={<Typography variant="body2">{ev}</Typography>}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" color="secondary" gutterBottom sx={{ fontWeight: 'bold' }}>
+                ✨ 特殊事件 (影响装饰物去留)
+              </Typography>
+              <Grid container spacing={1} sx={{ mb: 2 }}>
+                {SPECIAL_DECO_EVENTS.map(ev => (
+                  <Grid item xs={6} sm={4} key={ev}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox 
+                          size="small"
+                          checked={selectedEvents.includes(ev)} 
+                          onChange={() => handleToggleEvent(ev)} 
+                          color={filterMode === 'blacklist' ? 'error' : 'secondary'}
+                        />
+                      }
+                      label={<Typography variant="body2">{ev}</Typography>}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Typography variant="subtitle2" color="textSecondary" gutterBottom sx={{ fontWeight: 'bold' }}>
+                📝 其他事件
+              </Typography>
               <Grid container spacing={1}>
-                {ALL_EVENTS.map(ev => (
+                {ALL_EVENTS.filter(ev => !GAMEPLAY_EVENTS.includes(ev) && !SPECIAL_DECO_EVENTS.includes(ev)).map(ev => (
                   <Grid item xs={6} sm={4} key={ev}>
                     <FormControlLabel
                       control={
