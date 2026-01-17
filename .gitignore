@@ -10,7 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
-adofai
+adofai/dist
 *.local
 
 # Editor directories and files

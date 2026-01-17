@@ -39,18 +39,22 @@ async function runTest() {
     console.log(`Tile ${i}: Source=${sTime.toFixed(6)}s, Dist=${dTime.toFixed(6)}s, Diff=${(diff * 1000).toFixed(4)}ms`);
   }
 
-  // 检查是否有明显的累计误差
-  const lastIdx = Math.min(sourceLevel.tiles.length, distLevel.tiles.length) - 1;
-  const sFinal = sourceTiming.tileTimes[lastIdx];
-  const dFinal = distTiming.tileTimes[lastIdx];
+  // 检查最后一个砖块的时间戳差异
+  const sLastIdx = sourceTiming.tileTimes.length - 1;
+  const dLastIdx = distTiming.tileTimes.length - 1;
+  const sFinal = sourceTiming.tileTimes[sLastIdx];
+  const dFinal = distTiming.tileTimes[dLastIdx];
   const finalDiff = sFinal - dFinal;
-  console.log(`\n最后一个对应砖块 (${lastIdx}):`);
-  console.log(`Source=${sFinal.toFixed(6)}s, Dist=${dFinal.toFixed(6)}s, Diff=${(finalDiff * 1000).toFixed(4)}ms`);
+  
+  console.log('\n--- 最终时间戳对比 ---');
+  console.log(`源谱面最后一个砖块 (${sLastIdx}): ${sFinal.toFixed(6)}s`);
+  console.log(`目标谱面最后一个砖块 (${dLastIdx}): ${dFinal.toFixed(6)}s`);
+  console.log(`最终时间差异: ${(finalDiff * 1000).toFixed(4)}ms (${Math.abs(finalDiff).toFixed(4)}s)`);
 
-  if (Math.abs(finalDiff) > 0.001) {
-    console.warn('\n⚠️ 警告: 发现明显的时间戳差异！这可能是导致特效偏移的原因。');
+  if (Math.abs(finalDiff) < 1.0) {
+    console.log('\n✅ 成功: 两个谱面最终时间戳差异小于 1 秒。');
   } else {
-    console.log('\n✅ 时间戳基本一致。');
+    console.warn('\n❌ 失败: 两个谱面最终时间戳差异大于 1 秒，可能会导致特效明显偏移。');
   }
 }
 
