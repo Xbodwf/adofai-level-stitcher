@@ -42,61 +42,71 @@ export function getTilePauseDelay(tile: any, currentBpm: number): { delay: numbe
  * @param level ADOFAI Level 对象
  */
 export function calculateTiming(level: Level): TimingInfo {
-  let cbpm = level.settings.bpm;
-  
-  // 初始时间戳：如果第 0 个砖块有 angleData (即初始旋转角度)，则计算该角度消耗的时间
-  // 注意：Level.tiles[0] 的 angle 属性对应 angleData
-  let timestack = getTileTravelTime(level.tiles[0]?.angle || 0, cbpm);
-  
   const tileTimes: number[] = [];
-  const eventTimes: { 
-    tileIndex: number; 
-    event: AdofaiEvent; 
-    absoluteTime: number;
-    isDecoration?: boolean;
-  }[] = [];
+  const eventTimes: { event: any; absoluteTime: number; tileIndex: number; isDecoration: boolean }[] = [];
   const bpmAtTiles: number[] = [];
 
+  let currentBpm = level.settings.bpm;
+  let currentTime = 0;
+
   level.tiles.forEach((tile, index) => {
-    // 1. 处理当前砖块的 BPM 变更和 Pause
-    const { delay, finalBpm } = getTilePauseDelay(tile, cbpm);
-    
-    // Pause 增加的时间戳（在砖块开始时）
-    timestack += delay;
-    cbpm = finalBpm;
+    // 1. 计算到达当前砖块的时间 (T_i = T_{i-1} + D_{i-1} + travel_to_i)
+    // 使用进入该砖块时的 BPM (即上一块砖处理完后的 BPM)
+    const travelTime = getTileTravelTime(tile.angle || 0, currentBpm);
+    currentTime += travelTime;
 
-    // 记录当前砖块的 BPM
-    bpmAtTiles.push(cbpm);
+    // 记录击打时间（到达时间）
+    tileTimes.push(currentTime);
+    // 记录进入该砖块时的 BPM (用于后续缝合参考)
+    bpmAtTiles.push(currentBpm);
 
-    // 2. 记录当前砖块的击打时间戳
-    tileTimes.push(timestack);
+    // 2. 更新 BPM (先变速)
+    tile.actions?.forEach((event: any) => {
+      if (event.eventType === 'SetSpeed') {
+        if (event.speedType === 'Bpm') {
+          currentBpm = event.beatsPerMinute;
+        } else if (event.speedType === 'Multiplier') {
+          currentBpm *= event.bpmMultiplier;
+        }
+      }
+    });
 
-    // 3. 计算当前砖块上所有普通事件的绝对时间戳
-    tile.actions.forEach(event => {
+    // 3. 处理该砖块上的所有事件 (后偏移)
+    // 根据“先变速后偏移”原则，该砖块上所有事件的时间偏移都基于更新后的 currentBpm
+    tile.actions?.forEach((event: any) => {
       const angleOffset = event.angleOffset || 0;
-      const eventTime = timestack + (angleOffset / 180) * (60 / cbpm);
+      const eventTime = currentTime + getTileTravelTime(angleOffset, currentBpm);
+      
       eventTimes.push({
-        tileIndex: index,
         event: { ...event },
         absoluteTime: eventTime,
+        tileIndex: index,
         isDecoration: false
       });
     });
 
-    // 4. 处理装饰类事件
+    // 处理装饰类事件
     if (tile.addDecorations) {
-      tile.addDecorations.forEach(event => {
+      tile.addDecorations.forEach((event: any) => {
         eventTimes.push({
-          tileIndex: index,
           event: { ...event },
-          absoluteTime: timestack,
+          absoluteTime: currentTime,
+          tileIndex: index,
           isDecoration: true
         });
       });
     }
 
-    // 5. 更新 timestack 供下一个砖块使用
-    timestack += getTileTravelTime(tile.angle || 0, cbpm);
+    // 4. 计算 Pause 延迟 (同样基于更新后的 currentBpm)
+    let tilePauseDelay = 0;
+    tile.actions?.forEach((event: any) => {
+      if (event.eventType === 'Pause') {
+        tilePauseDelay += ((event.duration || 0) * 60) / currentBpm;
+      }
+    });
+
+    // 增加 Pause 延迟，这会影响下一个砖块的到达时间
+    currentTime += tilePauseDelay;
   });
 
   return { tileTimes, eventTimes, bpmAtTiles };
@@ -162,50 +172,66 @@ export function stitchLevels(
 
   // 2. 将事件迁移到目标谱面
   let currentTargetTileIdx = targetStartIndex;
-  let currentTargetBpm = targetTiming.bpmAtTiles[targetStartIndex];
-  let currentTargetTileTime = targetTiming.tileTimes[targetStartIndex];
+  // 追踪目标谱面的状态
+  let currentTargetBpm = targetTiming.bpmAtTiles[targetStartIndex]; // 当前计算用的 BPM (处理完变速后的)
+  let tileHitTime = targetTiming.tileTimes[targetStartIndex]; // 当前砖块的击打时间
+  let tilePauseDelay = 0; // 当前砖块上的总 Pause 延迟
+
+  // 初始化砖块状态 (先变速，再算 Pause)
+  const initTileState = () => {
+    tilePauseDelay = 0;
+    // 重新获取进入该砖块时的原始 BPM
+    let bpm = targetTiming.bpmAtTiles[currentTargetTileIdx];
+    targetLevel.tiles[currentTargetTileIdx].actions?.forEach((a: any) => {
+      if (a.eventType === 'SetSpeed') {
+        if (a.speedType === 'Bpm') bpm = a.beatsPerMinute;
+        else if (a.speedType === 'Multiplier') bpm *= a.bpmMultiplier;
+      }
+    });
+    currentTargetBpm = bpm;
+
+    // 计算 Pause (基于变速后的 BPM)
+    targetLevel.tiles[currentTargetTileIdx].actions?.forEach((a: any) => {
+      if (a.eventType === 'Pause') {
+        tilePauseDelay += ((a.duration || 0) * 60) / currentTargetBpm;
+      }
+    });
+  };
+  initTileState();
 
   eventsToTransfer.forEach(et => {
     const relativeTime = et.absoluteTime - sourceStartTime;
     const desiredTargetTime = targetStartTime + relativeTime;
 
-    // 1. 寻找合适的砖块：前进 currentTargetTileIdx 直到下一个砖块的“击打时间”超过 desiredTargetTime
+    // 1. 寻找合适的砖块
     while (currentTargetTileIdx < targetLevel.tiles.length - 1) {
-      const currentTile = targetLevel.tiles[currentTargetTileIdx];
-      const travelTime = getTileTravelTime(currentTile.angle || 0, currentTargetBpm);
-      
-      // 下一个砖块的基础到达时间
-      const nextTileArrivalTime = currentTargetTileTime + travelTime;
-      
-      // 计算下一个砖块上的原有 Pause 导致的额外延迟
+      // 到达下一个砖块的时间 = 当前砖块击打时间 + 当前砖块总 Pause + 到下一块的 Travel
+      // 注意：travel 使用的是处理完当前块所有变速后的 BPM
       const nextTile = targetLevel.tiles[currentTargetTileIdx + 1];
-      const { delay: nextTilePauseDelay, finalBpm: nextTileBpm } = getTilePauseDelay(nextTile, currentTargetBpm);
+      const travelToNext = getTileTravelTime(nextTile.angle || 0, currentTargetBpm);
+      const nextTileArrivalTime = tileHitTime + tilePauseDelay + travelToNext;
 
-      const nextTileHitTime = nextTileArrivalTime + nextTilePauseDelay;
-
-      if (nextTileHitTime > desiredTargetTime + 0.000001) {
+      if (nextTileArrivalTime > desiredTargetTime + 0.000001) {
         break;
       }
 
       // 移动到下一个砖块
-      currentTargetTileTime = nextTileHitTime;
-      currentTargetBpm = nextTileBpm;
+      tileHitTime = nextTileArrivalTime;
       currentTargetTileIdx++;
+      initTileState();
     }
 
     // --- 特殊处理第 0 个砖块 ---
     // 除非源事件就在第 0 块，否则强制移到第 1 块（使用负角度偏移）
     if (currentTargetTileIdx === 0 && et.tileIndex !== 0 && targetLevel.tiles.length > 1) {
       const currentTile = targetLevel.tiles[0];
-      const travelTime = getTileTravelTime(currentTile.angle || 0, currentTargetBpm);
-      const nextTileArrivalTime = currentTargetTileTime + travelTime;
+      // 注意：这里使用的是进入第 0 块时的原始 BPM 来计算到第 1 块的时间
+      const travelTime = getTileTravelTime(currentTile.angle || 0, targetTiming.bpmAtTiles[0]);
+      const nextTileArrivalTime = tileHitTime + travelTime;
       
-      const nextTile = targetLevel.tiles[1];
-      const { delay: nextTilePauseDelay, finalBpm: nextTileBpm } = getTilePauseDelay(nextTile, currentTargetBpm);
-      
-      currentTargetTileTime = nextTileArrivalTime + nextTilePauseDelay;
-      currentTargetBpm = nextTileBpm;
+      tileHitTime = nextTileArrivalTime;
       currentTargetTileIdx = 1;
+      initTileState(); // 重新同步状态
     }
 
     // 2. 标签冲突处理与映射
@@ -241,8 +267,8 @@ export function stitchLevels(
       }
       targetLevel.tiles[currentTargetTileIdx].addDecorations!.push(event);
     } else {
-      // 普通事件计算 angleOffset
-      const timeInTile = desiredTargetTime - currentTargetTileTime;
+      // 普通事件计算 angleOffset (严格使用当前处理完变速后的 BPM)
+      const timeInTile = desiredTargetTime - tileHitTime;
       const angleOffset = (timeInTile / (60 / currentTargetBpm)) * 180;
       event.angleOffset = angleOffset;
 
@@ -262,8 +288,8 @@ export function stitchLevels(
       } else if (event.eventType === 'Pause') {
         const e = event as any;
         const duration = e.duration || 0;
-        const pauseTime = (duration * 60) / currentTargetBpm;
-        currentTargetTileTime += pauseTime;
+        // Pause 增加到累积延迟中，基于当前 BPM (即变速后的)
+        tilePauseDelay += (duration * 60) / currentTargetBpm;
       }
     }
   });
