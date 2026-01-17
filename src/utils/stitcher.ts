@@ -187,6 +187,33 @@ export function stitchLevels(
       currentTargetTileIdx++;
     }
 
+    // --- 特殊处理第 0 个砖块 ---
+    // 除非源事件就在第 0 块，否则强制移到第 1 块（使用负角度偏移）
+    if (currentTargetTileIdx === 0 && et.tileIndex !== 0 && targetLevel.tiles.length > 1) {
+      const currentTile = targetLevel.tiles[0];
+      const angle = currentTile.angle || 0;
+      const travelTime = (angle / 180) * (60 / currentTargetBpm);
+      const nextTileArrivalTime = currentTargetTileTime + travelTime;
+      
+      let nextTilePauseDelay = 0;
+      let nextTileBpm = currentTargetBpm;
+      const nextTile = targetLevel.tiles[1];
+      nextTile.actions?.forEach(a => {
+        if (a.eventType === 'SetSpeed') {
+          const e = a as any;
+          if (e.speedType === 'Bpm') nextTileBpm = e.beatsPerMinute;
+          else if (e.speedType === 'Multiplier') nextTileBpm *= e.bpmMultiplier;
+        } else if (a.eventType === 'Pause') {
+          const e = a as any;
+          nextTilePauseDelay += ((e.duration || 0) * 60) / nextTileBpm;
+        }
+      });
+      
+      currentTargetTileTime = nextTileArrivalTime + nextTilePauseDelay;
+      currentTargetBpm = nextTileBpm;
+      currentTargetTileIdx = 1;
+    }
+
     // 2. 标签冲突处理与映射
     const event = { ...et.event };
     const decoDeclarationTypes = ['AddDecoration', 'AddObject', 'AddText'];
