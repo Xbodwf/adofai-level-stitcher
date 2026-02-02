@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18next from 'i18next';
 import { 
   Container, 
   Typography, 
@@ -30,7 +32,10 @@ import {
   TableHead,
   TableRow,
   Tab,
-  Tabs
+  Tabs,
+  IconButton,
+  Menu,
+  MenuItem
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SaveIcon from '@mui/icons-material/Save';
@@ -38,6 +43,8 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import InfoIcon from '@mui/icons-material/Info';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import GitHubIcon from '@mui/icons-material/GitHub';
+import LanguageIcon from '@mui/icons-material/Language';
 import { Level, Parsers } from 'adofai';
 import { stitchLevels, type StitchResult } from './utils/stitcher';
 
@@ -228,6 +235,9 @@ const m3Theme = createTheme({
 });
 
 function App() {
+  const { t } = useTranslation();
+  const [langAnchorEl, setLangAnchorEl] = useState<null | HTMLElement>(null);
+
   // 源谱面 (第一个文件)
   const [sourceLevel, setSourceLevel] = useState<Level | null>(null);
   const [sourceFileName, setSourceFileName] = useState<string>('');
@@ -285,7 +295,7 @@ function App() {
         }
       } catch (err) {
         console.error(err);
-        setError(`无法解析文件 ${file.name}，请确保格式正确。`);
+        setError(t('errors.parse', { name: file.name }));
       }
     };
     reader.readAsText(file);
@@ -324,8 +334,19 @@ function App() {
       });
     } catch (err) {
       console.error(err);
-      setError('缝合过程中出错。');
+      setError(t('errors.stitch'));
     }
+  };
+
+  const handleLangClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    setLangAnchorEl(event.currentTarget);
+  };
+
+  const handleLangClose = (lang?: string) => {
+    if (lang) {
+      i18next.changeLanguage(lang);
+    }
+    setLangAnchorEl(null);
   };
 
   return (
@@ -337,13 +358,44 @@ function App() {
         py: 8 
       }}>
         <Container maxWidth="md">
+          {/* Header with Language and GitHub */}
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2, gap: 1 }}>
+            <Tooltip title="Switch Language">
+              <IconButton onClick={handleLangClick} color="primary" sx={{ bgcolor: 'primary.container' }}>
+                <LanguageIcon />
+              </IconButton>
+            </Tooltip>
+            <Menu
+              anchorEl={langAnchorEl}
+              open={Boolean(langAnchorEl)}
+              onClose={() => handleLangClose()}
+            >
+              <MenuItem onClick={() => handleLangClose('zh')}>简体中文</MenuItem>
+              <MenuItem onClick={() => handleLangClose('en')}>English</MenuItem>
+              <MenuItem onClick={() => handleLangClose('ja')}>日本語</MenuItem>
+              <MenuItem onClick={() => handleLangClose('ko')}>한국어</MenuItem>
+            </Menu>
+            
+            <Tooltip title={t('github')}>
+              <IconButton 
+                component="a" 
+                href="https://github.com/Xbodwf/adofai-level-stitcher" 
+                target="_blank"
+                color="primary" 
+                sx={{ bgcolor: 'primary.container' }}
+              >
+                <GitHubIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+
           <Typography variant="h3" component="h1" gutterBottom align="center" sx={{ 
             color: 'primary.main', 
             fontWeight: 700, 
             mb: 8,
             letterSpacing: '-0.03em'
           }}>
-            ADOFAI Level Stitcher
+            {t('title')}
           </Typography>
           
           <Stack spacing={4}>
@@ -360,7 +412,7 @@ function App() {
                 <Box sx={{ bgcolor: 'primary.container', p: 1.5, borderRadius: 4, display: 'flex' }}>
                   <ContentCopyIcon sx={{ color: 'primary.onContainer', fontSize: 24 }} />
                 </Box>
-                1. 选择源谱面 (复制来源)
+                {t('source.title')}
               </Typography>
               
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: sourceLevel ? 4 : 0 }}>
@@ -369,7 +421,7 @@ function App() {
                   variant="contained"
                   startIcon={<CloudUploadIcon />}
                 >
-                  导入源谱面
+                  {t('source.import')}
                   <input
                     type="file"
                     hidden
@@ -378,25 +430,25 @@ function App() {
                   />
                 </Button>
                 <Typography variant="body2" color="text.secondary">
-                  {sourceFileName || '未选择文件'}
+                  {sourceFileName || t('source.noFile')}
                 </Typography>
               </Box>
 
               {sourceLevel && (
                 <Box sx={{ mt: 3 }}>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    谱面共有 {sourceLevel.tiles.length} 个砖块
+                    {t('source.tilesCount', { count: sourceLevel.tiles.length })}
                   </Typography>
                   <Stack direction="row" spacing={3}>
                     <TextField
-                      label="开始砖块索引"
+                      label={t('source.startIndex')}
                       type="number"
                       value={sourceStartTile}
                       onChange={(e) => setSourceStartTile(Math.max(0, Math.min(sourceLevel.tiles.length - 1, parseInt(e.target.value) || 0)))}
                       fullWidth
                     />
                     <TextField
-                      label="结束砖块索引"
+                      label={t('source.endIndex')}
                       type="number"
                       value={sourceEndTile}
                       onChange={(e) => setSourceEndTile(Math.max(sourceStartTile, Math.min(sourceLevel.tiles.length - 1, parseInt(e.target.value) || 0)))}
@@ -405,7 +457,7 @@ function App() {
                   </Stack>
                   <Box sx={{ mt: 3, p: 2, bgcolor: 'primary.container', borderRadius: 4 }}>
                     <Typography variant="subtitle2" sx={{ color: 'primary.onContainer' }}>
-                      已选择范围: {sourceStartTile} - {sourceEndTile} (共 {sourceEndTile - sourceStartTile + 1} 个砖块的事件)
+                      {t('source.selectedRange', { start: sourceStartTile, end: sourceEndTile, count: sourceEndTile - sourceStartTile + 1 })}
                     </Typography>
                   </Box>
                 </Box>
@@ -419,7 +471,7 @@ function App() {
                   <Box sx={{ bgcolor: 'secondary.container', p: 1.5, borderRadius: 4, display: 'flex' }}>
                     <FilterListIcon sx={{ color: 'secondary.onContainer', fontSize: 24 }} />
                   </Box>
-                  2. 事件过滤设置
+                  {t('filter.title')}
                 </Typography>
                 <ToggleButtonGroup
                   value={filterMode}
@@ -429,28 +481,28 @@ function App() {
                   color="primary"
                   sx={{ bgcolor: 'background.default', borderRadius: 4 }}
                 >
-                  <ToggleButton value="blacklist" sx={{ px: 2, borderRadius: '16px 0 0 16px' }}>黑名单</ToggleButton>
-                  <ToggleButton value="whitelist" sx={{ px: 2, borderRadius: '0 16px 16px 0' }}>白名单</ToggleButton>
+                  <ToggleButton value="blacklist" sx={{ px: 2, borderRadius: '16px 0 0 16px' }}>{t('filter.blacklist')}</ToggleButton>
+                  <ToggleButton value="whitelist" sx={{ px: 2, borderRadius: '0 16px 16px 0' }}>{t('filter.whitelist')}</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
 
               <Alert severity="info" sx={{ mb: 4, borderRadius: 4, bgcolor: 'secondary.container', color: 'secondary.onContainer' }} icon={<InfoIcon />}>
                 {filterMode === 'blacklist' 
-                  ? "黑名单模式：勾选的事件将【不会】被缝合。建议用于排除装饰类事件。" 
-                  : "白名单模式：只有勾选的事件才【会被】缝合。建议用于只提取特定逻辑。"}
+                  ? t('filter.blacklistInfo')
+                  : t('filter.whitelistInfo')}
               </Alert>
 
               <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center' }}>
-                <Button size="small" onClick={handleSelectAll} sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', '&:hover': { bgcolor: 'secondary.main', color: 'white' } }}>全选</Button>
-                <Button size="small" onClick={handleSelectNone} sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', '&:hover': { bgcolor: 'secondary.main', color: 'white' } }}>全不选</Button>
+                <Button size="small" onClick={handleSelectAll} sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', '&:hover': { bgcolor: 'secondary.main', color: 'white' } }}>{t('filter.selectAll')}</Button>
+                <Button size="small" onClick={handleSelectNone} sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', '&:hover': { bgcolor: 'secondary.main', color: 'white' } }}>{t('filter.selectNone')}</Button>
                 <Typography variant="caption" sx={{ ml: 'auto', color: 'text.secondary' }}>
-                  已选择 {selectedEvents.length} / {ALL_EVENTS.length} 种事件
+                  {t('filter.selectedCount', { selected: selectedEvents.length, total: ALL_EVENTS.length })}
                 </Typography>
               </Box>
               
               <Box sx={{ maxHeight: 400, overflow: 'auto', border: '1px solid', borderColor: 'divider', p: 3, borderRadius: 4, bgcolor: 'background.default' }}>
                 <Typography variant="subtitle2" color="primary" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                  🎮 玩法类事件 (默认勾选)
+                  {t('filter.gameplay')}
                 </Typography>
                 <Grid container spacing={1} sx={{ mb: 4 }}>
                   {GAMEPLAY_EVENTS.map(ev => (
@@ -473,7 +525,7 @@ function App() {
                 <Divider sx={{ my: 3 }} />
 
                 <Typography variant="subtitle2" color="secondary" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                  ✨ 特殊事件 (影响装饰物去留)
+                  {t('filter.special')}
                 </Typography>
                 <Grid container spacing={1} sx={{ mb: 4 }}>
                   {SPECIAL_DECO_EVENTS.map(ev => (
@@ -496,7 +548,7 @@ function App() {
                 <Divider sx={{ my: 3 }} />
 
                 <Typography variant="subtitle2" color="textSecondary" gutterBottom sx={{ fontWeight: 600, mb: 2 }}>
-                  📝 其他事件
+                  {t('filter.others')}
                 </Typography>
                 <Grid container spacing={1}>
                   {ALL_EVENTS.filter(ev => !GAMEPLAY_EVENTS.includes(ev) && !SPECIAL_DECO_EVENTS.includes(ev)).map(ev => (
@@ -523,7 +575,7 @@ function App() {
                 <Box sx={{ bgcolor: 'secondary.container', p: 1, borderRadius: 3, display: 'flex' }}>
                   <SaveIcon sx={{ color: 'secondary.onContainer' }} />
                 </Box>
-                3. 选择目标谱面 (粘贴目的地)
+                {t('target.title')}
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: targetLevel ? 4 : 0 }}>
                 <Button
@@ -532,7 +584,7 @@ function App() {
                   color="secondary"
                   startIcon={<CloudUploadIcon />}
                 >
-                  导入目标谱面
+                  {t('target.import')}
                   <input
                     type="file"
                     hidden
@@ -541,22 +593,22 @@ function App() {
                   />
                 </Button>
                 <Typography variant="body2" color="text.secondary">
-                  {targetFileName || '未选择文件'}
+                  {targetFileName || t('target.noFile')}
                 </Typography>
               </Box>
 
               {targetLevel && (
                 <Box sx={{ mt: 3 }}>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                    谱面共有 {targetLevel.tiles.length} 个砖块
+                    {t('target.tilesCount', { count: targetLevel.tiles.length })}
                   </Typography>
                   <TextField
-                    label="插入位置 (目标砖块索引)"
+                    label={t('target.insertIndex')}
                     type="number"
                     value={targetStartTile}
                     onChange={(e) => setTargetStartTile(Math.max(0, Math.min(targetLevel.tiles.length - 1, parseInt(e.target.value) || 0)))}
                     fullWidth
-                    helperText="源谱面的事件将从该砖块的时间点开始粘贴"
+                    helperText={t('target.helperText')}
                   />
                 </Box>
               )}
@@ -572,7 +624,7 @@ function App() {
                   onClick={handleStitch}
                   sx={{ px: 6, py: 2, fontSize: '1.1rem' }}
                 >
-                  开始缝合并导出
+                  {t('actions.stitch')}
                 </Button>
                 {stitchResult && (
                   <Button
@@ -583,7 +635,7 @@ function App() {
                     onClick={() => setShowDebug(true)}
                     sx={{ px: 4, py: 2, fontSize: '1.1rem' }}
                   >
-                    查看时间轴校验
+                    {t('actions.debug')}
                   </Button>
                 )}
               </Box>
@@ -601,7 +653,7 @@ function App() {
         PaperProps={{ sx: { borderRadius: 8, bgcolor: '#F8F9FF' } }}
       >
         <DialogTitle sx={{ px: 5, pt: 5, pb: 3, fontWeight: 700, fontSize: '1.75rem', color: 'primary.main' }}>
-          缝合时间轴校验面板
+          {t('debug.panelTitle')}
         </DialogTitle>
         <DialogContent sx={{ p: 0 }}>
           <Box sx={{ px: 5, mb: 0, bgcolor: 'background.paper' }}>
@@ -613,9 +665,9 @@ function App() {
                 py: 2
               }}
             >
-              <Tab label="迁移事件对比" sx={{ fontSize: '1rem', px: 3 }} />
-              <Tab label="源谱面时间轴" sx={{ fontSize: '1rem', px: 3 }} />
-              <Tab label="目标谱面时间轴" sx={{ fontSize: '1rem', px: 3 }} />
+              <Tab label={t('debug.tabs.transfer')} sx={{ fontSize: '1rem', px: 3 }} />
+              <Tab label={t('debug.tabs.source')} sx={{ fontSize: '1rem', px: 3 }} />
+              <Tab label={t('debug.tabs.target')} sx={{ fontSize: '1rem', px: 3 }} />
             </Tabs>
           </Box>
 
@@ -625,13 +677,13 @@ function App() {
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>事件类型</TableCell>
-                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>源砖块</TableCell>
-                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>源绝对时间 (s)</TableCell>
-                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>目标砖块</TableCell>
-                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>目标角度偏移</TableCell>
-                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>目标绝对时间 (s)</TableCell>
-                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>偏差 (ms)</TableCell>
+                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>{t('debug.table.eventType')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>{t('debug.table.sourceTile')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>{t('debug.table.sourceTime')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>{t('debug.table.targetTile')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>{t('debug.table.targetAngle')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>{t('debug.table.targetTime')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'primary.container', color: 'primary.onContainer', fontWeight: 600 }}>{t('debug.table.diff')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -663,9 +715,9 @@ function App() {
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>砖块索引</TableCell>
-                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>到达时间 (s)</TableCell>
-                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>当前 BPM</TableCell>
+                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>{t('debug.table.tileIndex')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>{t('debug.table.arrivalTime')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>{t('debug.table.currentBpm')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -686,9 +738,9 @@ function App() {
                 <Table stickyHeader size="small">
                   <TableHead>
                     <TableRow>
-                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>砖块索引</TableCell>
-                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>到达时间 (s)</TableCell>
-                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>当前 BPM</TableCell>
+                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>{t('debug.table.tileIndex')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>{t('debug.table.arrivalTime')}</TableCell>
+                      <TableCell sx={{ bgcolor: 'secondary.container', color: 'secondary.onContainer', fontWeight: 600 }}>{t('debug.table.currentBpm')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -707,7 +759,7 @@ function App() {
         </DialogContent>
         <DialogActions sx={{ px: 4, pb: 4 }}>
           <Button onClick={() => setShowDebug(false)} variant="contained">
-            关闭面板
+            {t('debug.close')}
           </Button>
         </DialogActions>
       </Dialog>
