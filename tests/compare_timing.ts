@@ -1,5 +1,6 @@
-import pkg from 'adofai';
-const { Level, Parsers } = pkg;
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { Level, Parsers } = require('adofai');
 import fs from 'fs';
 import path from 'path';
 import { calculateTiming } from '../src/utils/stitcher.js';

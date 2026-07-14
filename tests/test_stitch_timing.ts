@@ -1,5 +1,6 @@
-import pkg from 'adofai';
-const { Level, Parsers } = pkg;
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { Level, Parsers } = require('adofai');
 import fs from 'fs';
 import path from 'path';
 import { calculateTiming, stitchLevels } from '../src/utils/stitcher.js';
@@ -34,7 +35,8 @@ async function runTest() {
   console.log(`目标起始点: ${targetStartIndex}`);
 
   // 执行缝合
-  const resultLevel = stitchLevels(sourceLevel, sourceRange, targetLevel, targetStartIndex, allEvents, 'whitelist');
+  const result = stitchLevels(sourceLevel, sourceRange, targetLevel, targetStartIndex, allEvents, 'whitelist');
+  const resultLevel = result.level;
 
   // 计算三者的正向时间
   const sourceTiming = calculateTiming(sourceLevel);
@@ -46,10 +48,6 @@ async function runTest() {
   // 并且它们的时间应该与 sourceTiming.eventTimes 中对应的事件一致（相对位移后）
 
   const sourceStartTime = sourceTiming.tileTimes[sourceRange[0]];
-  const targetStartTime = sourceTiming.tileTimes[targetStartIndex]; // 注意：这里我们假设目标也是 source 这种结构来测试逻辑
-
-  // 实际上，我们应该比较 resultLevel 中新加事件的 absoluteTime 是否符合预期
-  // 预期时间 = targetTiming.tileTimes[targetStartIndex] + (sourceEvent.absoluteTime - sourceTiming.tileTimes[sourceRange[0]])
 
   const targetTiming = calculateTiming(targetLevel);
   const expectedStartTime = targetTiming.tileTimes[targetStartIndex];
@@ -61,29 +59,31 @@ async function runTest() {
     et.tileIndex >= sourceRange[0] && et.tileIndex <= sourceRange[1]
   );
 
-  // 获取 result 中对应的事件
-  // 由于 stitchLevels 可能会合并标签等，我们通过 absoluteTime 寻找最接近的
+  // 用 transferredEvents debug 信息对比
   let matchCount = 0;
   let maxDiff = 0;
+  let worst: any = null;
 
-  sourceEvents.forEach(se => {
-    const relativeTime = se.absoluteTime - sourceStartTime;
-    const expectedTime = expectedStartTime + relativeTime;
-
-    // 在 resultTiming 中找最接近的事件
-    const closest = resultTiming.eventTimes.reduce((prev, curr) => {
-      return Math.abs(curr.absoluteTime - expectedTime) < Math.abs(prev.absoluteTime - expectedTime) ? curr : prev;
-    });
-
-    const diff = Math.abs(closest.absoluteTime - expectedTime);
-    if (diff < 0.1) { // 100ms 以内认为是对应的
+  result.transferredEvents.forEach((te, idx) => {
+    const expectedTime = expectedStartTime + (te.sourceTime - sourceStartTime);
+    const diff = Math.abs(te.targetTime - expectedTime);
+    if (diff < 0.1) {
       matchCount++;
       maxDiff = Math.max(maxDiff, diff);
     }
+    if (diff > maxDiff) {
+      worst = { te, expectedTime, diff, idx };
+    }
   });
 
-  console.log(`成功匹配事件数: ${matchCount} / ${sourceEvents.length}`);
+  console.log(`成功匹配事件数: ${matchCount} / ${result.transferredEvents.length}`);
   console.log(`最大时间偏差: ${(maxDiff * 1000).toFixed(4)}ms`);
+
+  if (worst && maxDiff > 0.001) {
+    console.log(`\n最差偏差事件: ${worst.te.eventType} sourceTile=${worst.te.sourceTileIndex} targetTile=${worst.te.targetTileIndex}`);
+    console.log(`  期望时间: ${worst.expectedTime.toFixed(6)}s, 实际: ${worst.te.targetTime.toFixed(6)}s`);
+    console.log(`  sourceTime: ${worst.te.sourceTime.toFixed(6)}s, targetAngleOffset: ${worst.te.targetAngleOffset}`);
+  }
 
   if (maxDiff < 0.001) {
     console.log('\n✅ 成功: 缝合后的事件时间精确匹配 (偏差 < 1ms)');

@@ -1,9 +1,8 @@
 import { calculateTiming } from '../src/utils/stitcher.ts';
 import fs from 'fs';
-// @ts-ignore
-import adofai from 'adofai';
-
-const { Level, Parsers } = adofai;
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { Level, Parsers } = require('adofai');
 
 async function testTiming(filePath: string, tileIndex: number) {
   try {
